@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juego del Cubo - Plataformas</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .game-container {
+            position: relative;
+            border: 3px solid #333;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+        }
+        
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%);
+        }
+        
+        .ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        
+        .game-over {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        .game-over h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #FF6B6B;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        
+        .game-over p {
+            font-size: 24px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .game-over .final-score {
+            font-size: 32px;
+            color: #FFD700;
+            margin-bottom: 40px;
+            font-weight: bold;
+        }
+        
+        .game-over .message {
+            font-size: 18px;
+            color: #CCC;
+            text-align: center;
+            max-width: 400px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        <div class="ui">
+            <div>Puntuación: <span id="score">0</span></div>
+            <div>Vidas: <span id="lives">3</span></div>
+        </div>
+        <div class="game-over" id="gameOver">
+            <h1>¡GAME OVER!</h1>
+            <p>Tu puntuación final:</p>
+            <div class="final-score" id="finalScore">0</div>
+            <div class="message">
+                Para volver a jugar, recarga la página (F5 o Ctrl+R)
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let score = 0;
+        let lives = 3;
+        let gameSpeed = 2;
+        let gameRunning = true;
+        
+        const player = {
+            x: 100,
+            y: 300,
+            width: 30,
+            height: 30,
+            velocityY: 0,
+            velocityX: 0,
+            onGround: false,
+            color: '#FF6B6B',
+            lastPlatform: null
+        };
+        
+        let platforms = [];
+        let spikes = [];
+        const gravity = 0.8;
+        const jumpPower = -20;
+        const moveSpeed = 5;
+        
+        function initPlatforms() {
+            platforms = [
+                { x: 0, y: 350, width: 200, height: 50, color: '#8B4513' },
+                { x: 300, y: 300, width: 150, height: 50, color: '#228B22' },
+                { x: 550, y: 250, width: 120, height: 50, color: '#FFD700' },
+                { x: 750, y: 200, width: 100, height: 50, color: '#FF6347' }
+            ];
+            generateSpikes();
+        }
+        
+        function generateSpikes() {
+            spikes = [];
+            for (let i = 0; i < platforms.length; i++) {
+                let platform = platforms[i];
+                // No agregar pinchos en la primera plataforma (plataforma de inicio)
+                if (i === 0) continue;
+                
+                // Agregar pinchos en algunas plataformas (60% de probabilidad)
+                if (Math.random() < 0.6) {
+                    // Calcular cuántos pinchos caben en la plataforma
+                    const maxSpikes = Math.floor(platform.width / 60); // Un pincho cada 60 píxeles
+                    const actualSpikes = Math.floor(Math.random() * maxSpikes) + 1; // Entre 1 y maxSpikes
+                    
+                    for (let j = 0; j < actualSpikes; j++) {
+                        // Espaciar los pinchos uniformemente
+                        const spacing = platform.width / (actualSpikes + 1);
+                        const spikeX = platform.x + (j + 1) * spacing - 10; // Centrar el pincho
+                        
+                        spikes.push({
+                            x: spikeX,
+                            y: platform.y - 15,
+                            width: 20,
+                            height: 15,
+                            color: '#FF0000'
+                        });
+                    }
+                }
+            }
+        }
+        
+        function checkCollision(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+        
+        function updatePlayer() {
+            player.velocityY += gravity;
+            player.y += player.velocityY;
+            
+            player.onGround = false;
+            for (let platform of platforms) {
+                if (checkCollision(player, platform)) {
+                    if (player.velocityY > 0 && player.y < platform.y) {
+                        player.y = platform.y - player.height;
+                        player.velocityY = 0;
+                        player.onGround = true;
+                        
+                        // Sumar puntuación solo si es una plataforma nueva
+                        if (player.lastPlatform !== platform) {
+                            score += 1;
+                            player.lastPlatform = platform;
+                        }
+                    }
+                }
+            }
+            
+            // Verificar colisión con pinchos
+            for (let spike of spikes) {
+                if (checkCollision(player, spike)) {
+                    lives--;
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    } else {
+                        // Solo resetear posición del jugador, no el juego completo
+                        resetPlayer();
+                        return;
+                    }
+                }
+            }
+            
+            if (player.y + player.height > canvas.height) {
+                // Game over cuando toque el suelo
+                gameOver();
+                return;
+            }
+            
+            // Mover plataformas y pinchos
+            for (let platform of platforms) {
+                platform.x -= gameSpeed;
+            }
+            for (let spike of spikes) {
+                spike.x -= gameSpeed;
+            }
+            
+            platforms = platforms.filter(platform => platform.x + platform.width > 0);
+            spikes = spikes.filter(spike => spike.x + spike.width > 0);
+            
+            if (platforms.length < 4) {
+                const lastPlatform = platforms[platforms.length - 1];
+                const newX = lastPlatform ? lastPlatform.x + 250 : 800;
+                const newY = 100 + Math.random() * 200;
+                const newWidth = 60 + Math.random() * 100;
+                
+                const newPlatform = {
+                    x: newX,
+                    y: newY,
+                    width: newWidth,
+                    height: 50,
+                    color: `hsl(${Math.random() * 360}, 70%, 60%)`
+                };
+                
+                platforms.push(newPlatform);
+                
+                // Agregar pinchos a la nueva plataforma (60% de probabilidad)
+                if (Math.random() < 0.6) {
+                    // Calcular cuántos pinchos caben en la plataforma
+                    const maxSpikes = Math.floor(newPlatform.width / 60); // Un pincho cada 60 píxeles
+                    const actualSpikes = Math.floor(Math.random() * maxSpikes) + 1; // Entre 1 y maxSpikes
+                    
+                    for (let j = 0; j < actualSpikes; j++) {
+                        // Espaciar los pinchos uniformemente
+                        const spacing = newPlatform.width / (actualSpikes + 1);
+                        const spikeX = newPlatform.x + (j + 1) * spacing - 10; // Centrar el pincho
+                        
+                        spikes.push({
+                            x: spikeX,
+                            y: newPlatform.y - 15,
+                            width: 20,
+                            height: 15,
+                            color: '#FF0000'
+                        });
+                    }
+                }
+            }
+            
+            if (player.y > canvas.height + 50) {
+                // Game over cuando caiga completamente
+                gameOver();
+                return;
+            }
+        }
+        
+        function resetPlayer() {
+            player.x = 100;
+            player.y = 300;
+            player.velocityY = 0;
+            player.velocityX = 0;
+            player.lastPlatform = null;
+        }
+        
+        function teleportToSafeLocation() {
+            // Buscar la plataforma más cercana y segura (sin pinchos)
+            let safePlatform = null;
+            
+            // Primero buscar la plataforma inicial (siempre segura)
+            for (let platform of platforms) {
+                if (platform.x <= 200 && platform.x + platform.width >= 100) {
+                    safePlatform = platform;
+                    break;
+                }
+            }
+            
+            // Si no encuentra la plataforma inicial, buscar cualquier plataforma sin pinchos
+            if (!safePlatform) {
+                for (let platform of platforms) {
+                    let hasSpikes = false;
+                    for (let spike of spikes) {
+                        // Verificar si hay pinchos en esta plataforma específica
+                        if (spike.x >= platform.x && spike.x <= platform.x + platform.width &&
+                            spike.y >= platform.y - 20 && spike.y <= platform.y) {
+                            hasSpikes = true;
+                            break;
+                        }
+                    }
+                    if (!hasSpikes) {
+                        safePlatform = platform;
+                        break;
+                    }
+                }
+            }
+            
+            // Si no encuentra ninguna plataforma segura, crear una nueva plataforma segura
+            if (!safePlatform) {
+                // Crear una plataforma segura en una posición aleatoria
+                const newX = 100 + Math.random() * 300;
+                const newY = 250 + Math.random() * 100;
+                const newWidth = 80 + Math.random() * 60;
+                
+                safePlatform = {
+                    x: newX,
+                    y: newY,
+                    width: newWidth,
+                    height: 50,
+                    color: '#00FF00' // Verde para indicar que es segura
+                };
+                
+                // Agregar la plataforma temporal a la lista
+                platforms.push(safePlatform);
+            }
+            
+            // Teletransportar al jugador
+            if (safePlatform) {
+                player.x = safePlatform.x + (safePlatform.width / 2) - (player.width / 2);
+                player.y = safePlatform.y - player.height;
+                player.velocityY = 0;
+                player.velocityX = 0;
+                player.lastPlatform = safePlatform;
+            } else {
+                // Fallback: posición inicial
+                resetPlayer();
+            }
+        }
+        
+        function gameOver() {
+            gameRunning = false;
+            document.getElementById('finalScore').textContent = score;
+            document.getElementById('gameOver').style.display = 'flex';
+        }
+        
+        function resetGame() {
+            score = 0;
+            lives = 3;
+            gameRunning = true;
+            resetPlayer();
+            initPlatforms();
+            document.getElementById('gameOver').style.display = 'none';
+        }
+        
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Dibujar plataformas
+            for (let platform of platforms) {
+                ctx.fillStyle = platform.color;
+                ctx.fillRect(platform.x, platform.y, platform.width, platform.height);
+            }
+            
+            // Dibujar pinchos
+            for (let spike of spikes) {
+                ctx.fillStyle = spike.color;
+                ctx.beginPath();
+                ctx.moveTo(spike.x, spike.y + spike.height);
+                ctx.lineTo(spike.x + spike.width/2, spike.y);
+                ctx.lineTo(spike.x + spike.width, spike.y + spike.height);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Borde del pincho
+                ctx.strokeStyle = '#8B0000';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+            
+            // Dibujar jugador
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(player.x, player.y, player.width, player.height);
+        }
+        
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = lives;
+        }
+        
+        function gameLoop() {
+            if (gameRunning) {
+                updatePlayer();
+                draw();
+                updateUI();
+                requestAnimationFrame(gameLoop);
+            }
+        }
+        
+        const keys = {};
+        
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+        });
+        
+        function handleInput() {
+            if (keys['ArrowLeft'] || keys['KeyA']) {
+                player.velocityX = -moveSpeed;
+            } else if (keys['ArrowRight'] || keys['KeyD']) {
+                player.velocityX = moveSpeed;
+            } else {
+                player.velocityX = 0;
+            }
+            
+            if ((keys['ArrowUp'] || keys['KeyW'] || keys['Space']) && player.onGround) {
+                player.velocityY = jumpPower;
+                player.onGround = false;
+            }
+            
+            player.x += player.velocityX;
+            
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+        }
+        
+        function inputLoop() {
+            if (gameRunning) {
+                handleInput();
+            }
+            requestAnimationFrame(inputLoop);
+        }
+        
+        initPlatforms();
+        gameLoop();
+        inputLoop();
+    </script>
+</body>
+</html>
