@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Juego del Cubo1</title>
     <style>
         body {
@@ -14,6 +14,8 @@
             align-items: center;
             min-height: 100vh;
             font-family: 'Arial', sans-serif;
+            overflow: hidden;
+            touch-action: none;
         }
         
         .game-container {
@@ -21,11 +23,15 @@
             border: 3px solid #333;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            max-width: 100vw;
+            max-height: 100vh;
         }
         
         canvas {
             display: block;
             background: linear-gradient(to bottom, #87CEEB 0%, #98FB98 100%);
+            max-width: 100%;
+            max-height: 100vh;
         }
         
         .ui {
@@ -36,6 +42,57 @@
             font-size: 18px;
             font-weight: bold;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            z-index: 10;
+        }
+        
+        .mobile-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            z-index: 10;
+        }
+        
+        .jump-button {
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            border-radius: 50%;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+        }
+        
+        .jump-button:active {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(0.95);
+        }
+        
+        .mobile-instructions {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            z-index: 20;
+            max-width: 300px;
         }
         
         .game-over {
@@ -80,6 +137,45 @@
             max-width: 400px;
             line-height: 1.5;
         }
+        
+        .restart-button {
+            background: #FF6B6B;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s ease;
+        }
+        
+        .restart-button:hover {
+            background: #FF5252;
+        }
+        
+        @media (max-width: 768px) {
+            .ui {
+                font-size: 16px;
+            }
+            
+            .game-over h1 {
+                font-size: 36px;
+            }
+            
+            .game-over p {
+                font-size: 20px;
+            }
+            
+            .game-over .final-score {
+                font-size: 28px;
+            }
+            
+            .game-over .message {
+                font-size: 16px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -89,13 +185,25 @@
             <div>Puntuación: <span id="score">0</span></div>
             <div>Vidas: <span id="lives">3</span></div>
         </div>
+        <div class="mobile-controls" id="mobileControls">
+            <div class="jump-button" id="jumpButton">
+                SALTAR
+            </div>
+        </div>
+        <div class="mobile-instructions" id="mobileInstructions">
+            <h3>¡Bienvenido al Juego del Cubo!</h3>
+            <p>En móvil: Toca la pantalla para saltar</p>
+            <p>En PC: Usa las flechas o WASD</p>
+            <button onclick="hideInstructions()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-top: 10px; cursor: pointer;">¡Entendido!</button>
+        </div>
         <div class="game-over" id="gameOver">
             <h1>¡GAME OVER!</h1>
             <p>Tu puntuación final:</p>
             <div class="final-score" id="finalScore">0</div>
             <div class="message">
-                Para volver a jugar, recarga la página (F5 o Ctrl+R)
+                Toca el botón para volver a jugar
             </div>
+            <button class="restart-button" onclick="resetGame()">Jugar de Nuevo</button>
         </div>
     </div>
 
@@ -107,6 +215,40 @@
         let lives = 3;
         let gameSpeed = 2;
         let gameRunning = true;
+        let isMobile = false;
+        let canvasScale = 1;
+        
+        // Detectar si es dispositivo móvil
+        function detectMobile() {
+            isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                      window.innerWidth <= 768;
+            
+            if (isMobile) {
+                document.getElementById('mobileControls').style.display = 'flex';
+                document.getElementById('mobileInstructions').style.display = 'block';
+                resizeCanvas();
+            }
+        }
+        
+        // Redimensionar canvas para dispositivos móviles
+        function resizeCanvas() {
+            const container = document.querySelector('.game-container');
+            const maxWidth = Math.min(window.innerWidth - 40, 800);
+            const maxHeight = Math.min(window.innerHeight - 100, 400);
+            
+            canvasScale = Math.min(maxWidth / 800, maxHeight / 400);
+            
+            canvas.style.width = (800 * canvasScale) + 'px';
+            canvas.style.height = (400 * canvasScale) + 'px';
+            
+            // Ajustar el tamaño del contenedor
+            container.style.width = (800 * canvasScale) + 'px';
+            container.style.height = (400 * canvasScale) + 'px';
+        }
+        
+        function hideInstructions() {
+            document.getElementById('mobileInstructions').style.display = 'none';
+        }
         
         const player = {
             x: 100,
@@ -355,6 +497,7 @@
             resetPlayer();
             initPlatforms();
             document.getElementById('gameOver').style.display = 'none';
+            gameLoop();
         }
         
         function draw() {
@@ -415,6 +558,20 @@
             keys[e.code] = false;
         });
         
+        // Eventos táctiles para dispositivos móviles
+        function handleTouch(e) {
+            e.preventDefault();
+            if (player.onGround) {
+                player.velocityY = jumpPower;
+                player.onGround = false;
+            }
+        }
+        
+        // Agregar eventos táctiles
+        canvas.addEventListener('touchstart', handleTouch, { passive: false });
+        document.getElementById('jumpButton').addEventListener('touchstart', handleTouch, { passive: false });
+        document.getElementById('jumpButton').addEventListener('click', handleTouch);
+        
         function handleInput() {
             if (keys['ArrowLeft'] || keys['KeyA']) {
                 player.velocityX = -moveSpeed;
@@ -442,9 +599,18 @@
             requestAnimationFrame(inputLoop);
         }
         
+        // Inicializar el juego
+        detectMobile();
         initPlatforms();
         gameLoop();
         inputLoop();
+        
+        // Manejar redimensionamiento de ventana
+        window.addEventListener('resize', () => {
+            if (isMobile) {
+                resizeCanvas();
+            }
+        });
     </script>
 </body>
 </html>
