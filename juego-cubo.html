@@ -217,6 +217,8 @@
         let gameRunning = true;
         let isMobile = false;
         let canvasScale = 1;
+        let lastTimestamp = null;
+        let mobileSpeedMultiplier = 1;
         
         // Detectar si es dispositivo móvil
         function detectMobile() {
@@ -227,6 +229,8 @@
                 document.getElementById('mobileControls').style.display = 'flex';
                 document.getElementById('mobileInstructions').style.display = 'block';
                 resizeCanvas();
+                // En móviles bajar ligeramente la velocidad de scroll para mejor accesibilidad
+                mobileSpeedMultiplier = 0.85;
             }
         }
         
@@ -315,9 +319,10 @@
                    rect1.y + rect1.height > rect2.y;
         }
         
-        function updatePlayer() {
-            player.velocityY += gravity;
-            player.y += player.velocityY;
+        function updatePlayer(dt) {
+            // dt está normalizado a 60fps (1.0 a 60Hz)
+            player.velocityY += gravity * dt;
+            player.y += player.velocityY * dt;
             
             player.onGround = false;
             for (let platform of platforms) {
@@ -357,12 +362,17 @@
                 return;
             }
             
+            // Mover jugador horizontal segun input aplicado a velocityX
+            player.x += player.velocityX * dt;
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
             // Mover plataformas y pinchos
             for (let platform of platforms) {
-                platform.x -= gameSpeed;
+                platform.x -= gameSpeed * dt * mobileSpeedMultiplier;
             }
             for (let spike of spikes) {
-                spike.x -= gameSpeed;
+                spike.x -= gameSpeed * dt * mobileSpeedMultiplier;
             }
             
             platforms = platforms.filter(platform => platform.x + platform.width > 0);
@@ -539,13 +549,21 @@
             document.getElementById('lives').textContent = lives;
         }
         
-        function gameLoop() {
-            if (gameRunning) {
-                updatePlayer();
-                draw();
-                updateUI();
-                requestAnimationFrame(gameLoop);
-            }
+        function gameLoop(timestamp) {
+            if (!gameRunning) return;
+            if (lastTimestamp === null) lastTimestamp = timestamp;
+            const deltaMs = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+            // Normalizar a 60fps -> 16.666...ms = dt 1.0
+            let dt = deltaMs / (1000 / 60);
+            // Evitar saltos muy grandes o demasiado pequeños
+            if (!isFinite(dt) || dt <= 0) dt = 1;
+            dt = Math.min(dt, 2); // cap a 2x
+
+            updatePlayer(dt);
+            draw();
+            updateUI();
+            requestAnimationFrame(gameLoop);
         }
         
         const keys = {};
@@ -585,11 +603,6 @@
                 player.velocityY = jumpPower;
                 player.onGround = false;
             }
-            
-            player.x += player.velocityX;
-            
-            if (player.x < 0) player.x = 0;
-            if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
         }
         
         function inputLoop() {
@@ -602,7 +615,7 @@
         // Inicializar el juego
         detectMobile();
         initPlatforms();
-        gameLoop();
+        requestAnimationFrame(gameLoop);
         inputLoop();
         
         // Manejar redimensionamiento de ventana
