@@ -155,6 +155,75 @@
             background: #FF5252;
         }
         
+        .difficulty-menu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: white;
+            font-family: 'Arial', sans-serif;
+            z-index: 30;
+        }
+        
+        .difficulty-menu h1 {
+            font-size: 48px;
+            margin-bottom: 40px;
+            color: #FFD700;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+            text-align: center;
+        }
+        
+        .difficulty-menu p {
+            font-size: 20px;
+            margin-bottom: 40px;
+            text-align: center;
+            color: #CCC;
+        }
+        
+        .difficulty-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+        
+        .difficulty-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: 3px solid #FFD700;
+            padding: 20px 40px;
+            border-radius: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 200px;
+            text-align: center;
+        }
+        
+        .difficulty-button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+        
+        .difficulty-button.easy {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+        
+        .difficulty-button.medium {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+        }
+        
+        .difficulty-button.hard {
+            background: linear-gradient(135deg, #F44336 0%, #D32F2F 100%);
+        }
+        
         @media (max-width: 768px) {
             .ui {
                 font-size: 16px;
@@ -174,6 +243,22 @@
             
             .game-over .message {
                 font-size: 16px;
+            }
+            
+            .difficulty-menu h1 {
+                font-size: 36px;
+                margin-bottom: 30px;
+            }
+            
+            .difficulty-menu p {
+                font-size: 18px;
+                margin-bottom: 30px;
+            }
+            
+            .difficulty-button {
+                padding: 15px 30px;
+                font-size: 20px;
+                min-width: 180px;
             }
         }
     </style>
@@ -196,6 +281,21 @@
             <p>En PC: Usa las flechas o WASD</p>
             <button onclick="hideInstructions()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 5px; margin-top: 10px; cursor: pointer;">¡Entendido!</button>
         </div>
+        <div class="difficulty-menu" id="difficultyMenu">
+            <h1>🎮 Juego del Cubo</h1>
+            <p>Selecciona la dificultad para comenzar</p>
+            <div class="difficulty-buttons">
+                <button class="difficulty-button easy" onclick="startGame('easy')">
+                    🌱 Dificultad Baja
+                </button>
+                <button class="difficulty-button medium" onclick="startGame('medium')">
+                    ⚡ Dificultad Media
+                </button>
+                <button class="difficulty-button hard" onclick="startGame('hard')">
+                    🔥 Dificultad Alta
+                </button>
+            </div>
+        </div>
         <div class="game-over" id="gameOver">
             <h1>¡GAME OVER!</h1>
             <p>Tu puntuación final:</p>
@@ -203,7 +303,7 @@
             <div class="message">
                 Toca el botón para volver a jugar
             </div>
-            <button class="restart-button" onclick="resetGame()">Jugar de Nuevo</button>
+            <button class="restart-button" onclick="showDifficultyMenu()">Jugar de Nuevo</button>
         </div>
     </div>
 
@@ -214,11 +314,12 @@
         let score = 0;
         let lives = 3;
         let gameSpeed = 2;
-        let gameRunning = true;
+        let gameRunning = false; // Cambiado a false para que no inicie automáticamente
         let isMobile = false;
         let canvasScale = 1;
         let lastTimestamp = null;
         let mobileSpeedMultiplier = 1;
+        let gameStarted = false; // Nueva variable para controlar si el juego ha comenzado
         
         // Detectar si es dispositivo móvil
         function detectMobile() {
@@ -500,6 +601,44 @@
             document.getElementById('gameOver').style.display = 'flex';
         }
         
+        function showDifficultyMenu() {
+            gameRunning = false;
+            gameStarted = false;
+            document.getElementById('difficultyMenu').style.display = 'flex';
+            document.getElementById('gameOver').style.display = 'none';
+        }
+        
+        function startGame(difficulty) {
+            // Configurar la velocidad según la dificultad
+            switch(difficulty) {
+                case 'easy':
+                    gameSpeed = 1.2; // Más lento
+                    break;
+                case 'medium':
+                    gameSpeed = 2; // Velocidad estándar
+                    break;
+                case 'hard':
+                    gameSpeed = 3.5; // Más rápido
+                    break;
+                default:
+                    gameSpeed = 2;
+            }
+            
+            // Ocultar el menú de dificultad
+            document.getElementById('difficultyMenu').style.display = 'none';
+            
+            // Inicializar el juego
+            score = 0;
+            lives = 3;
+            gameRunning = true;
+            gameStarted = true;
+            resetPlayer();
+            initPlatforms();
+            
+            // Iniciar el bucle del juego
+            gameLoop();
+        }
+        
         function resetGame() {
             score = 0;
             lives = 3;
@@ -550,7 +689,7 @@
         }
         
         function gameLoop(timestamp) {
-            if (!gameRunning) return;
+            if (!gameRunning || !gameStarted) return;
             if (lastTimestamp === null) lastTimestamp = timestamp;
             const deltaMs = timestamp - lastTimestamp;
             lastTimestamp = timestamp;
@@ -606,7 +745,7 @@
         }
         
         function inputLoop() {
-            if (gameRunning) {
+            if (gameRunning && gameStarted) {
                 handleInput();
             }
             requestAnimationFrame(inputLoop);
@@ -615,7 +754,7 @@
         // Inicializar el juego
         detectMobile();
         initPlatforms();
-        requestAnimationFrame(gameLoop);
+        // No iniciar el bucle del juego automáticamente, esperar a que se seleccione dificultad
         inputLoop();
         
         // Manejar redimensionamiento de ventana
