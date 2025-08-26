@@ -53,8 +53,17 @@
             display: none;
             flex-direction: column;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
             z-index: 10;
+        }
+        
+        .mobile-controls.horizontal {
+            flex-direction: row;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            transform: none;
+            justify-content: space-between;
         }
         
         .jump-button {
@@ -78,6 +87,29 @@
         .jump-button:active {
             background: rgba(255, 255, 255, 0.5);
             transform: scale(0.95);
+        }
+        
+        .orientation-toggle {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            border-radius: 25px;
+            padding: 8px 15px;
+            color: white;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+            z-index: 15;
+            display: none;
+        }
+        
+        .orientation-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
         }
         
         .mobile-instructions {
@@ -270,6 +302,9 @@
             <div>Puntuación: <span id="score">0</span></div>
             <div>Vidas: <span id="lives">3</span></div>
         </div>
+        <div class="orientation-toggle" id="orientationToggle">
+            📱 Vertical
+        </div>
         <div class="mobile-controls" id="mobileControls">
             <div class="jump-button" id="jumpButton">
                 SALTAR
@@ -328,10 +363,25 @@
             
             if (isMobile) {
                 document.getElementById('mobileControls').style.display = 'flex';
+                document.getElementById('orientationToggle').style.display = 'block';
                 document.getElementById('mobileInstructions').style.display = 'block';
                 resizeCanvas();
                 // En móviles bajar ligeramente la velocidad de scroll para mejor accesibilidad
                 mobileSpeedMultiplier = 0.85;
+            }
+        }
+        
+        // Función para cambiar orientación de controles móviles
+        function toggleOrientation() {
+            const controls = document.getElementById('mobileControls');
+            const toggle = document.getElementById('orientationToggle');
+            
+            if (controls.classList.contains('horizontal')) {
+                controls.classList.remove('horizontal');
+                toggle.textContent = '📱 Vertical';
+            } else {
+                controls.classList.add('horizontal');
+                toggle.textContent = '📱 Horizontal';
             }
         }
         
@@ -369,16 +419,16 @@
         
         let platforms = [];
         let spikes = [];
-        const gravity = 0.8;
-        const jumpPower = -20;
+        const gravity = 0.7; // Reducida para mejor control
+        const jumpPower = -18; // Ajustado para mejor alcance
         const moveSpeed = 5;
         
         function initPlatforms() {
             platforms = [
-                { x: 0, y: 350, width: 200, height: 50, color: '#8B4513' },
-                { x: 300, y: 300, width: 150, height: 50, color: '#228B22' },
-                { x: 550, y: 250, width: 120, height: 50, color: '#FFD700' },
-                { x: 750, y: 200, width: 100, height: 50, color: '#FF6347' }
+                { x: 0, y: 350, width: 250, height: 50, color: '#8B4513' },
+                { x: 350, y: 300, width: 200, height: 50, color: '#228B22' },
+                { x: 650, y: 250, width: 180, height: 50, color: '#FFD700' },
+                { x: 900, y: 200, width: 150, height: 50, color: '#FF6347' }
             ];
             generateSpikes();
         }
@@ -468,12 +518,14 @@
             if (player.x < 0) player.x = 0;
             if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
 
-            // Mover plataformas y pinchos
-            for (let platform of platforms) {
-                platform.x -= gameSpeed * dt * mobileSpeedMultiplier;
-            }
-            for (let spike of spikes) {
-                spike.x -= gameSpeed * dt * mobileSpeedMultiplier;
+            // Mover plataformas y pinchos solo si el juego está activo
+            if (gameRunning && gameStarted) {
+                for (let platform of platforms) {
+                    platform.x -= gameSpeed * dt * mobileSpeedMultiplier;
+                }
+                for (let spike of spikes) {
+                    spike.x -= gameSpeed * dt * mobileSpeedMultiplier;
+                }
             }
             
             platforms = platforms.filter(platform => platform.x + platform.width > 0);
@@ -481,9 +533,9 @@
             
             if (platforms.length < 4) {
                 const lastPlatform = platforms[platforms.length - 1];
-                const newX = lastPlatform ? lastPlatform.x + 250 : 800;
+                const newX = lastPlatform ? lastPlatform.x + 300 : 800;
                 const newY = 100 + Math.random() * 200;
-                const newWidth = 60 + Math.random() * 100;
+                const newWidth = 120 + Math.random() * 150; // Plataformas más anchas
                 
                 const newPlatform = {
                     x: newX,
@@ -674,22 +726,25 @@
                 ctx.stroke();
             }
             
-            // Dibujar jugador
-            ctx.fillStyle = player.color;
-            ctx.fillRect(player.x, player.y, player.width, player.height);
-            
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(player.x, player.y, player.width, player.height);
+            // Dibujar jugador solo si el juego está activo
+            if (gameRunning && gameStarted) {
+                ctx.fillStyle = player.color;
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+                
+                ctx.strokeStyle = '#333';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(player.x, player.y, player.width, player.height);
+            }
         }
         
         function updateUI() {
-            document.getElementById('score').textContent = score;
-            document.getElementById('lives').textContent = lives;
+            if (gameRunning && gameStarted) {
+                document.getElementById('score').textContent = score;
+                document.getElementById('lives').textContent = lives;
+            }
         }
         
         function gameLoop(timestamp) {
-            if (!gameRunning || !gameStarted) return;
             if (lastTimestamp === null) lastTimestamp = timestamp;
             const deltaMs = timestamp - lastTimestamp;
             lastTimestamp = timestamp;
@@ -699,7 +754,12 @@
             if (!isFinite(dt) || dt <= 0) dt = 1;
             dt = Math.min(dt, 2); // cap a 2x
 
-            updatePlayer(dt);
+            // Solo actualizar el juego si está activo
+            if (gameRunning && gameStarted) {
+                updatePlayer(dt);
+            }
+            
+            // Siempre dibujar para mostrar el menú y las plataformas
             draw();
             updateUI();
             requestAnimationFrame(gameLoop);
@@ -728,6 +788,7 @@
         canvas.addEventListener('touchstart', handleTouch, { passive: false });
         document.getElementById('jumpButton').addEventListener('touchstart', handleTouch, { passive: false });
         document.getElementById('jumpButton').addEventListener('click', handleTouch);
+        document.getElementById('orientationToggle').addEventListener('click', toggleOrientation);
         
         function handleInput() {
             if (keys['ArrowLeft'] || keys['KeyA']) {
@@ -754,7 +815,8 @@
         // Inicializar el juego
         detectMobile();
         initPlatforms();
-        // No iniciar el bucle del juego automáticamente, esperar a que se seleccione dificultad
+        // Iniciar el bucle del juego para mostrar el menú
+        requestAnimationFrame(gameLoop);
         inputLoop();
         
         // Manejar redimensionamiento de ventana
