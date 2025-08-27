@@ -356,6 +356,49 @@
         let mobileSpeedMultiplier = 1;
         let gameStarted = false; // Nueva variable para controlar si el juego ha comenzado
         
+        // Nuevas variables para control de FPS y rendimiento
+        let targetFPS = 60;
+        let frameTime = 1000 / targetFPS;
+        let lastFrameTime = 0;
+        let fpsCounter = 0;
+        let currentFPS = 60;
+        let devicePerformance = 'medium'; // low, medium, high
+        let adaptiveSpeed = true;
+        let frameSkip = 0;
+        let maxFrameSkip = 2;
+        
+        // Detectar rendimiento del dispositivo
+        function detectDevicePerformance() {
+            const startTime = performance.now();
+            let testCount = 0;
+            
+            // Test simple de rendimiento
+            for (let i = 0; i < 1000000; i++) {
+                testCount += Math.random();
+            }
+            
+            const endTime = performance.now();
+            const testDuration = endTime - startTime;
+            
+            // Clasificar rendimiento basado en el tiempo de ejecución
+            if (testDuration < 10) {
+                devicePerformance = 'high';
+                targetFPS = 60;
+                adaptiveSpeed = true;
+            } else if (testDuration < 30) {
+                devicePerformance = 'medium';
+                targetFPS = 50;
+                adaptiveSpeed = true;
+            } else {
+                devicePerformance = 'low';
+                targetFPS = 30;
+                adaptiveSpeed = false;
+            }
+            
+            console.log(`Rendimiento detectado: ${devicePerformance}, FPS objetivo: ${targetFPS}`);
+            frameTime = 1000 / targetFPS;
+        }
+        
         // Detectar si es dispositivo móvil
         function detectMobile() {
             isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
@@ -366,8 +409,28 @@
                 document.getElementById('orientationToggle').style.display = 'block';
                 document.getElementById('mobileInstructions').style.display = 'block';
                 resizeCanvas();
-                // En móviles bajar ligeramente la velocidad de scroll para mejor accesibilidad
-                mobileSpeedMultiplier = 0.85;
+                
+                // Detectar rendimiento específico para móviles
+                detectDevicePerformance();
+                
+                // Ajustar velocidad según el dispositivo
+                if (devicePerformance === 'high') {
+                    // Dispositivos de alto rendimiento como Galaxy S24 Ultra
+                    mobileSpeedMultiplier = 0.6; // Reducir significativamente la velocidad
+                    targetFPS = 45; // Limitar FPS para mejor control
+                    frameTime = 1000 / targetFPS;
+                } else if (devicePerformance === 'medium') {
+                    mobileSpeedMultiplier = 0.8;
+                    targetFPS = 50;
+                    frameTime = 1000 / targetFPS;
+                } else {
+                    mobileSpeedMultiplier = 1.0;
+                    targetFPS = 30;
+                    frameTime = 1000 / targetFPS;
+                }
+                
+                console.log(`Móvil detectado - Rendimiento: ${devicePerformance}, Velocidad: ${mobileSpeedMultiplier}, FPS: ${targetFPS}`);
+                console.log(`Optimizaciones aplicadas para dispositivo de alto rendimiento`);
             }
         }
         
@@ -520,11 +583,17 @@
 
             // Mover plataformas y pinchos solo si el juego está activo
             if (gameRunning && gameStarted) {
+                // Aplicar limitación adicional de velocidad para dispositivos de alto rendimiento
+                let speedMultiplier = mobileSpeedMultiplier;
+                if (devicePerformance === 'high' && currentFPS > targetFPS * 1.2) {
+                    speedMultiplier *= 0.7; // Reducir aún más la velocidad
+                }
+                
                 for (let platform of platforms) {
-                    platform.x -= gameSpeed * dt * mobileSpeedMultiplier;
+                    platform.x -= gameSpeed * dt * speedMultiplier;
                 }
                 for (let spike of spikes) {
-                    spike.x -= gameSpeed * dt * mobileSpeedMultiplier;
+                    spike.x -= gameSpeed * dt * speedMultiplier;
                 }
             }
             
@@ -676,6 +745,12 @@
                     gameSpeed = 2;
             }
             
+            // Ajustar velocidad adicional para dispositivos de alto rendimiento
+            if (isMobile && devicePerformance === 'high') {
+                gameSpeed *= 0.7; // Reducir velocidad base en dispositivos rápidos
+                console.log(`Velocidad ajustada para dispositivo de alto rendimiento: ${gameSpeed}`);
+            }
+            
             // Ocultar el menú de dificultad
             document.getElementById('difficultyMenu').style.display = 'none';
             
@@ -741,18 +816,46 @@
             if (gameRunning && gameStarted) {
                 document.getElementById('score').textContent = score;
                 document.getElementById('lives').textContent = lives;
+                
+                // Mostrar información de rendimiento en modo debug (solo en desarrollo)
+                if (isMobile && devicePerformance === 'high') {
+                    // Opcional: mostrar FPS actual en la UI para debugging
+                    // document.getElementById('score').textContent = `${score} (${currentFPS}fps)`;
+                }
             }
         }
         
         function gameLoop(timestamp) {
+            // Control de FPS para dispositivos de alto rendimiento
+            if (timestamp - lastFrameTime < frameTime) {
+                requestAnimationFrame(gameLoop);
+                return;
+            }
+            
+            // Calcular FPS actual
+            fpsCounter++;
+            if (timestamp - lastFrameTime >= 1000) {
+                currentFPS = fpsCounter;
+                fpsCounter = 0;
+                lastFrameTime = timestamp;
+            }
+            
             if (lastTimestamp === null) lastTimestamp = timestamp;
             const deltaMs = timestamp - lastTimestamp;
             lastTimestamp = timestamp;
-            // Normalizar a 60fps -> 16.666...ms = dt 1.0
-            let dt = deltaMs / (1000 / 60);
+            
+            // Normalizar a FPS objetivo
+            let dt = deltaMs / (1000 / targetFPS);
+            
             // Evitar saltos muy grandes o demasiado pequeños
             if (!isFinite(dt) || dt <= 0) dt = 1;
             dt = Math.min(dt, 2); // cap a 2x
+            
+            // Ajuste adaptativo de velocidad para dispositivos de alto rendimiento
+            if (adaptiveSpeed && devicePerformance === 'high' && currentFPS > targetFPS * 1.1) {
+                // Si el FPS es mucho más alto que el objetivo, reducir la velocidad del juego
+                dt *= 0.8;
+            }
 
             // Solo actualizar el juego si está activo
             if (gameRunning && gameStarted) {
@@ -812,8 +915,27 @@
             requestAnimationFrame(inputLoop);
         }
         
+        // Función para optimizar el rendimiento en dispositivos móviles
+        function optimizeForMobile() {
+            if (isMobile) {
+                // Reducir la calidad de renderizado en dispositivos móviles
+                canvas.style.imageRendering = 'pixelated';
+                
+                // Optimizar el contexto del canvas
+                ctx.imageSmoothingEnabled = false;
+                
+                // Ajustar la frecuencia de actualización según el dispositivo
+                if (devicePerformance === 'high') {
+                    // Para dispositivos como Galaxy S24 Ultra, limitar más agresivamente
+                    targetFPS = Math.min(targetFPS, 45);
+                    frameTime = 1000 / targetFPS;
+                }
+            }
+        }
+        
         // Inicializar el juego
         detectMobile();
+        optimizeForMobile();
         initPlatforms();
         // Iniciar el bucle del juego para mostrar el menú
         requestAnimationFrame(gameLoop);
